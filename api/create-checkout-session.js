@@ -30,6 +30,7 @@ module.exports = async (req, res) => {
     }));
 
     const session = await stripe.checkout.sessions.create({
+      locale: req.body.locale || 'auto',
       mode: "payment",
       payment_method_types: ["card"],
       line_items,
