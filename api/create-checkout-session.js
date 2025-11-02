@@ -2,10 +2,9 @@
 const Stripe = require("stripe");
 const stripe = new Stripe(process.env.STRIPE_SECRET, { apiVersion: "2023-10-16" });
 
-// cambia al dominio real de tu web
 const ORIGIN = "https://ingrix.es";
+const ENVIO_CENTS = 499; // 4,99 €
 
-// Endpoint
 module.exports = async (req, res) => {
   const origin = req.headers.origin || "";
   const allowOrigin = origin === ORIGIN ? origin : ORIGIN;
@@ -23,7 +22,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "No items" });
     }
 
-    // Line items
+    // Line items (solo productos; el envío va aparte como shipping_options)
     const line_items = items.map((i) => {
       const amount = Math.round(Number(i.unit_amount_eur) * 100);
       if (!Number.isFinite(amount) || amount <= 0) {
@@ -39,9 +38,8 @@ module.exports = async (req, res) => {
       };
     });
 
-    // Metadatos (para vincular con el email de diseños)
-    const meta = {};
-    if (token) meta.pedido_token = String(token);
+    // Metadatos para vincular con el email de diseños
+    const meta = token ? { pedido_token: String(token) } : {};
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -51,10 +49,21 @@ module.exports = async (req, res) => {
       allow_promotion_codes: true,
       shipping_address_collection: { allowed_countries: ["ES"] },
 
-      // 🔗 Vínculos para rastrear el pedido
-      client_reference_id: token || undefined, // visible en el panel de Stripe
-      metadata: meta,                           // en la sesión
-      payment_intent_data: { metadata: meta },  // en el pago final
+      // 🚛 Envío fijo 4,99 €
+      shipping_options: [
+        {
+          shipping_rate_data: {
+            display_name: "Envío Península y Baleares",
+            type: "fixed_amount",
+            fixed_amount: { amount: ENVIO_CENTS, currency: "eur" },
+          },
+        },
+      ],
+
+      // Vínculos para rastrear el pedido
+      client_reference_id: token || undefined,
+      metadata: meta,
+      payment_intent_data: { metadata: meta },
 
       // URLs de retorno
       success_url: `${ORIGIN}/success.html?session_id={CHECKOUT_SESSION_ID}`,
